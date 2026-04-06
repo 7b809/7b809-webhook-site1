@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Webhook Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark text-light">
+
+<div class="container mt-4">
+    <h2 class="mb-4">📊 Webhook Alerts Dashboard</h2>
+
+    <!-- 🔽 Controls -->
+    <form method="get" class="row g-3 mb-4">
+
+        <!-- Market -->
+        <div class="col-md-3">
+            <label class="form-label">Market</label>
+            <select name="name" class="form-select" onchange="this.form.submit()">
+                <option value="bitcoin" {% if selected_name == 'bitcoin' %}selected{% endif %}>Bitcoin</option>
+                <option value="gift-nifty" {% if selected_name == 'gift-nifty' %}selected{% endif %}>Gift Nifty</option>
+                <option value="nifty" {% if selected_name == 'nifty' %}selected{% endif %}>Nifty</option>
+            </select>
+        </div>
+
+        <!-- Indicator -->
+        <div class="col-md-3">
+            <label class="form-label">Indicator</label>
+            <select name="indicator" class="form-select" onchange="this.form.submit()">
+                <option value="wavetrend" {% if selected_indicator == 'wavetrend' %}selected{% endif %}>WaveTrend</option>
+                <option value="xm-indicator" {% if selected_indicator == 'xm-indicator' %}selected{% endif %}>XM Indicator</option>
+                <option value="support-and-resistance" {% if selected_indicator == 'support-and-resistance' %}selected{% endif %}>Support & Resistance</option>
+            </select>
+        </div>
+
+        <!-- Limit -->
+        <div class="col-md-2">
+            <label class="form-label">Limit</label>
+            <input 
+                type="number" 
+                name="limit" 
+                class="form-control" 
+                value="{{ limit }}" 
+                min="1"
+            >
+        </div>
+
+        <!-- Timezone -->
+        <div class="col-md-2">
+            <label class="form-label">Timezone</label>
+            <select id="timezone" class="form-select">
+                <option value="UTC">UTC</option>
+                <option value="Asia/Kolkata" selected>IST</option>
+                <option value="America/New_York">New York</option>
+                <option value="Europe/London">London</option>
+                <option value="Asia/Dubai">Dubai</option>
+            </select>
+        </div>
+
+        <!-- Load Button -->
+        <div class="col-md-3 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">
+                🔄 Load Data
+            </button>
+        </div>
+
+    </form>
+
+    <!-- 📊 Table -->
+    <div class="table-responsive">
+        <table class="table table-dark table-striped table-hover align-middle">
+            <thead class="table-secondary text-dark">
+                <tr>
+                    <th>#</th>
+                    <th>Market</th>
+                    <th>Indicator</th>
+                    <th>Content</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+        </table>
+    </div>
+
+</div>
+
+<!-- 🚀 JS Auto Fetch -->
+<script>
+
+// 🔄 Convert timezone
+function convertToTimezone(timeStr, timezone) {
+    if (!timeStr) return "";
+
+    const date = new Date(timeStr.replace(" ", "T"));
+
+    return new Intl.DateTimeFormat("en-IN", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false
+    }).format(date);
+}
+
+function loadData() {
+    const name = document.querySelector("select[name='name']").value;
+    const indicator = document.querySelector("select[name='indicator']").value;
+    const limit = document.querySelector("input[name='limit']").value;
+    const timezone = document.getElementById("timezone").value;
+
+    fetch(`/api/data?name=${name}&indicator=${indicator}&limit=${limit}`)
+        .then(res => res.json())
+        .then(data => {
+            const tbody = document.getElementById("table-body");
+            tbody.innerHTML = "";
+
+            if (data.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center text-warning">
+                            ⚠️ No data found
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            // ✅ SORT latest first
+            data.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+            data.forEach((item, index) => {
+                let color = "";
+
+                if (item.content && item.content.toLowerCase().includes("buy")) {
+                    color = "text-success fw-bold";
+                } else if (item.content && item.content.toLowerCase().includes("sell")) {
+                    color = "text-danger fw-bold";
+                }
+
+                const convertedTime = convertToTimezone(item.time, timezone);
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td><span class="badge bg-info text-dark">${item.name}</span></td>
+                        <td><span class="badge bg-warning text-dark">${item.indicator || "-"}</span></td>
+                        <td class="${color}">${item.content || ""}</td>
+                        <td>${convertedTime}</td>
+                    </tr>
+                `;
+            });
+        })
+        .catch(err => {
+            console.error("Fetch error:", err);
+        });
+}
+
+// 🔁 Auto refresh every 5 sec
+setInterval(loadData, 5000);
+
+// 🔄 Reload on timezone change
+document.getElementById("timezone").addEventListener("change", loadData);
+
+// 🔥 Initial load
+window.onload = loadData;
+
+</script>
+
+</body>
+</html>
