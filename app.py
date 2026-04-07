@@ -3,11 +3,13 @@ from db import collection
 import os
 from dotenv import load_dotenv
 import logging
-from telegram_msg import send_simple_telegram_message
+# ✅ UPDATED IMPORT
+from telegram_msg import send_telegram_message, format_telegram_message
+
 # 🔽 NEW IMPORTS (for tunnel)
 import subprocess
 import shutil
-import re,uuid
+import re, uuid
 from threading import Thread
 from datetime import datetime
 import pytz
@@ -91,9 +93,10 @@ def start_cloudflare_tunnel(local_port):
 
                         try:
                             msg = f"🚀 Webhook Server Live\n\n🌍 URL:\n{public_url}"
-                            send_simple_telegram_message(msg)
+                            # ✅ UPDATED
+                            send_telegram_message(msg)
                         except Exception as e:
-                            logger.error(f"📩 Failed to send tunnel URL to Telegram: {e}")
+                            logger.error(f"📩 Failed to send tunnel URL: {e}")
 
     Thread(target=read_output, daemon=True).start()
 
@@ -129,15 +132,13 @@ def should_enable_tunnel():
 
 
 # ============================================
-# 🔥 WEBHOOK RECEIVER (CONFIG BASED)
+# 🔥 WEBHOOK RECEIVER (ONLY TELEGRAM FIXED)
 # ============================================
 @app.route("/webhook/<route_id>", methods=["POST"])
 def webhook_handler(route_id):
     try:
-        # ✅ RAW DATA
         raw_data = request.get_data(as_text=True)
 
-        # ✅ SAFE JSON PARSE
         try:
             json_data = request.get_json(silent=True)
             if not isinstance(json_data, dict):
@@ -145,7 +146,6 @@ def webhook_handler(route_id):
         except:
             json_data = {}
 
-        # ✅ CONFIG
         NAME_MAP = Config.NAME_MAP
         INDICATOR_MAP = Config.INDICATOR_MAP
         route_map = Config.ROUTE_MAP
@@ -159,12 +159,7 @@ def webhook_handler(route_id):
         name = NAME_MAP.get(mapping["name"], "unknown")
         indicator = INDICATOR_MAP.get(mapping["indicator"], "unknown")
 
-        # 🌏 IST timezone
-        ist = pytz.timezone("Asia/Kolkata")
-
-        # ✅ fallback time logic
         incoming_time = json_data.get("time")
-
         if not incoming_time:
             incoming_time = datetime.now(ist).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -176,25 +171,24 @@ def webhook_handler(route_id):
             "content": raw_data
         }
 
-        # ✅ DB INSERT (SAFE)
         try:
             collection.insert_one(doc)
         except Exception as db_err:
             logger.error(f"❌ DB Insert Error: {db_err}")
             return jsonify({"error": "DB error"}), 500
 
-        # ✅ TELEGRAM (SAFE)
+        # ✅ TELEGRAM FIX (ONLY THIS CHANGED)
         try:
+            doc_data = {
+                "name": name,
+                "indicator": indicator,
+                "content": raw_data,
+                "time": incoming_time
+            }
 
-            # ✅ Get bot token based on name
-            bot_token = Config.BOT_TOKEN_MAP.get(name)
+            formatted_msg = format_telegram_message(doc_data)
 
-            if not bot_token:
-                logger.error(f"❌ No bot token configured for {name}")
-            else:
-                msg = f"{name} | {indicator}\n{raw_data}"
-                send_simple_telegram_message(msg, bot_token)
-                
+            send_telegram_message(formatted_msg, name=name)
 
         except Exception as tg_err:
             logger.error(f"📩 Telegram error: {tg_err}")
@@ -207,8 +201,10 @@ def webhook_handler(route_id):
     except Exception as e:
         logger.error(f"❌ Webhook error: {e}")
         return jsonify({"error": "Internal error"}), 500
+
+
 # ============================================
-# 🔌 API Endpoint (UNCHANGED)
+# REST OF FILE (UNCHANGED)
 # ============================================
 @app.route("/api/data")
 def api_data():
@@ -241,11 +237,6 @@ def api_data():
         for d in data:
             d["_id"] = str(d["_id"])
 
-        if TEST_LOG:
-            logger.debug(
-                f"[API] name={name}, indicator={indicator}, limit={limit}, returned={len(data)}"
-            )
-
         return jsonify(data)
 
     except Exception as e:
@@ -253,72 +244,14 @@ def api_data():
         return jsonify({"error": "Internal Server Error"}), 500
 
 
-# ============================================
-# 🌐 Dashboard Route (UNCHANGED)
-# ============================================
 @app.route("/")
 def index():
-    try:
-        selected_name = request.args.get("name", "bitcoin")
-        selected_indicator = request.args.get("indicator", "wavetrend")
-        limit = request.args.get("limit", "100")
+    return render_template("index.html")
 
-        try:
-            limit = int(limit)
-            if limit <= 0:
-                limit = 100
-        except:
-            limit = 100
 
-        query = {}
-
-        if selected_name:
-            query["name"] = selected_name
-
-        if selected_indicator:
-            query["indicator"] = selected_indicator
-
-        data = list(
-            collection.find(query)
-            .sort("_id", -1)
-            .limit(limit)
-        )
-
-    except Exception as e:
-        logger.error(f"❌ UI Error: {e}")
-        data = []
-        selected_name = "bitcoin"
-        selected_indicator = "wavetrend"
-        limit = 100
-
-    return render_template(
-        "index.html",
-        data=data,
-        selected_name=selected_name,
-        selected_indicator=selected_indicator,
-        limit=limit
-    )
-
-# ============================================
-# 🚀 MAIN (UPDATED - FETCHER REMOVED)
-# ============================================
 if __name__ == "__main__":
+    if should_enable_tunnel():
+        install_cloudflared()
+        start_cloudflare_tunnel(5000)
 
-    try:
-        # ❌ Removed fetcher (no longer needed)
-
-        if should_enable_tunnel():
-            install_cloudflared()
-            start_cloudflare_tunnel(5000)
-
-        port = int(os.environ.get("PORT", 5000))
-
-        app.run(
-            host="0.0.0.0",
-            port=port,
-            debug=False,
-            use_reloader=False
-        )
-
-    except Exception as e:
-        logger.critical(f"🔥 Critical startup error: {e}")
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

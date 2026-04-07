@@ -9,10 +9,14 @@ load_dotenv()
 
 logger = logging.getLogger("telegram")
 
-# ✅ Default fallback bot (your current one)
+# ============================================
+# 🔑 ENV CONFIG
+# ============================================
+
+# ✅ Default fallback bot
 DEFAULT_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-# ✅ Same chat ID for all
+# ✅ Same chat ID
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # ✅ Bot tokens per NAME
@@ -43,7 +47,7 @@ def clean_message(text):
 
 
 # ============================================
-# 🔁 Get Bot Token (with fallback)
+# 🔁 Get Bot Token
 # ============================================
 def get_bot_token(name):
     try:
@@ -52,45 +56,16 @@ def get_bot_token(name):
         if token:
             return token
 
-        logger.warning(f"⚠️ No specific bot for {name}, using default")
+        logger.warning(f"⚠️ No bot for {name}, using default")
         return DEFAULT_BOT_TOKEN
 
     except Exception as e:
-        logger.error(f"❌ Token fetch error: {e}")
+        logger.error(f"❌ Token error: {e}")
         return DEFAULT_BOT_TOKEN
 
 
 # ============================================
-# 📩 Send Telegram Message (SAFE + FALLBACK)
-# ============================================
-def send_telegram_message(text, name=None):
-    if not TELEGRAM_CHAT_ID:
-        logger.warning("⚠️ Chat ID missing")
-        return
-
-    # ✅ Get correct bot
-    bot_token = get_bot_token(name)
-
-    # ✅ Try primary bot first
-    success = _send_with_token(text, bot_token)
-
-    if success:
-        return
-
-    # 🔥 Fallback to default bot
-    if bot_token != DEFAULT_BOT_TOKEN:
-        logger.warning("🔁 Retrying with DEFAULT bot")
-
-        fallback_success = _send_with_token(text, DEFAULT_BOT_TOKEN)
-
-        if fallback_success:
-            return
-
-    logger.error("🚫 All Telegram attempts failed")
-
-
-# ============================================
-# 🚀 Internal Send Logic (with retries)
+# 🚀 Core Send Logic
 # ============================================
 def _send_with_token(text, bot_token):
     if not bot_token:
@@ -127,6 +102,35 @@ def _send_with_token(text, bot_token):
             time.sleep(RETRY_DELAY * attempt)
 
     return False
+
+
+# ============================================
+# 📩 MAIN SEND FUNCTION (USE THIS ONLY)
+# ============================================
+def send_telegram_message(text, name=None):
+    if not TELEGRAM_CHAT_ID:
+        logger.warning("⚠️ Chat ID missing")
+        return
+
+    # ✅ Get correct bot
+    bot_token = get_bot_token(name)
+
+    # ✅ Try primary bot
+    success = _send_with_token(text, bot_token)
+
+    if success:
+        return
+
+    # 🔥 Fallback to default bot
+    if bot_token != DEFAULT_BOT_TOKEN:
+        logger.warning("🔁 Fallback → DEFAULT bot")
+
+        fallback_success = _send_with_token(text, DEFAULT_BOT_TOKEN)
+
+        if fallback_success:
+            return
+
+    logger.error("🚫 All Telegram attempts failed")
 
 
 # ============================================
