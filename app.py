@@ -39,6 +39,60 @@ if not logger.handlers:
 
 app = Flask(__name__)
 
+# ===================== 🆕 PnL TRACKING =====================
+last_trade = {}
+
+def parse_wavetrend_message(message):
+    try:
+        parts = message.split("_")
+
+        if len(parts) < 6:
+            return None
+
+        return {
+            "old_type": parts[0],
+            "old_action": parts[1],
+            "new_type": parts[2],
+            "new_action": parts[3],
+            "price": float(parts[5])
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Parse error: {e}")
+        return None
+
+
+def calculate_pnl(name, parsed_data):
+    try:
+        global last_trade
+
+        price = parsed_data["price"]
+
+        if name in last_trade:
+            entry_price = last_trade[name]["price"]
+
+            # ✅ CE / PE logic
+            if parsed_data["old_type"] == "pe":
+                pnl = entry_price - price
+            else:
+                pnl = price - entry_price
+
+            result = {
+                "entry": entry_price,
+                "exit": price,
+                "pnl": round(pnl, 2)
+            }
+
+            last_trade[name] = parsed_data
+            return result
+
+        last_trade[name] = parsed_data
+        return None
+
+    except Exception as e:
+        logger.error(f"❌ PnL error: {e}")
+        return None
+
 # ============================================
 # 🌐 Cloudflare Tunnel Helpers (UNCHANGED)
 # ============================================
@@ -93,7 +147,6 @@ def start_cloudflare_tunnel(local_port):
 
                         try:
                             msg = f"🚀 Webhook Server Live\n\n🌍 URL:\n{public_url}"
-                            # ✅ UPDATED
                             send_telegram_message(msg)
                         except Exception as e:
                             logger.error(f"📩 Failed to send tunnel URL: {e}")
@@ -137,14 +190,11 @@ def is_within_time(route_id):
     try:
         config = Config.ALERT_TIME_CONFIG.get(route_id)
 
-        # No config → allow
         if not config or not config.get("enabled"):
             return True
 
-        # ✅ Current IST datetime
         now_ist = datetime.now(ist)
 
-        # ✅ Parse start/end in IST (same date)
         start_dt = ist.localize(
             datetime.strptime(config["start"], "%H:%M").replace(
                 year=now_ist.year,
@@ -165,11 +215,10 @@ def is_within_time(route_id):
 
     except Exception as e:
         logger.error(f"⏱️ Time check error: {e}")
-        return True  # fail-safe
-    
+        return True
 
 # ============================================
-# 🔥 WEBHOOK RECEIVER (ONLY TELEGRAM FIXED)
+# 🔥 WEBHOOK RECEIVER
 # ============================================
 @app.route("/webhook/<route_id>", methods=["POST"])
 def webhook_handler(route_id):
@@ -214,7 +263,7 @@ def webhook_handler(route_id):
             logger.error(f"❌ DB Insert Error: {db_err}")
             return jsonify({"error": "DB error"}), 500
 
-        # ✅ TELEGRAM FIX (ONLY THIS CHANGED)
+        # ✅ TELEGRAM + PnL (ADDED ONLY)
         try:
             doc_data = {
                 "name": name,
@@ -225,13 +274,26 @@ def webhook_handler(route_id):
 
             formatted_msg = format_telegram_message(doc_data)
 
+            # 🆕 PnL logic
+            if indicator == "wavetrend":
+                parsed = parse_wavetrend_message(raw_data)
+
+                if parsed:
+                    pnl_data = calculate_pnl(name, parsed)
+
+                    if pnl_data:
+                        formatted_msg += (
+                            f"\n\n💰 PnL Update\n"
+                            f"Entry: {pnl_data['entry']}\n"
+                            f"Exit: {pnl_data['exit']}\n"
+                            f"P&L: {pnl_data['pnl']}"
+                        )
+
             # ✅ TIME FILTER
             if is_within_time(route_id):
                 send_telegram_message(formatted_msg, name=name)
             else:
-                logger.info(f"⏳ Skipped Telegram (outside time window) → route {route_id}")
-
-
+                logger.info(f"⏳ Skipped Telegram → route {route_id}")
 
         except Exception as tg_err:
             logger.error(f"📩 Telegram error: {tg_err}")
@@ -246,9 +308,6 @@ def webhook_handler(route_id):
         return jsonify({"error": "Internal error"}), 500
 
 
-# ============================================
-# REST OF FILE (UNCHANGED)
-# ============================================
 @app.route("/api/data")
 def api_data():
     try:
@@ -299,6 +358,7 @@ def index():
         selected_indicator=indicator,
         limit=limit
     )
+
 
 if __name__ == "__main__":
     if should_enable_tunnel():
