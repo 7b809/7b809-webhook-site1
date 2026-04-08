@@ -246,8 +246,16 @@ def api_data():
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    name = request.args.get("name", "bitcoin")
+    indicator = request.args.get("indicator", "wavetrend")
+    limit = request.args.get("limit", 100)
 
+    return render_template(
+        "index.html",
+        selected_name=name,
+        selected_indicator=indicator,
+        limit=limit
+    )
 
 if __name__ == "__main__":
     if should_enable_tunnel():

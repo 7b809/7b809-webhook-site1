@@ -15,8 +15,7 @@
         <!-- Market -->
         <div class="col-md-3">
             <label class="form-label">Market</label>
-            <select name="name" class="form-select" onchange="this.form.submit()">
-                <option value="bitcoin" {% if selected_name == 'bitcoin' %}selected{% endif %}>Bitcoin</option>
+<select name="name" class="form-select">                <option value="bitcoin" {% if selected_name == 'bitcoin' %}selected{% endif %}>Bitcoin</option>
                 <option value="gift-nifty" {% if selected_name == 'gift-nifty' %}selected{% endif %}>Gift Nifty</option>
                 <option value="nifty" {% if selected_name == 'nifty' %}selected{% endif %}>Nifty</option>
             </select>
@@ -25,8 +24,7 @@
         <!-- Indicator -->
         <div class="col-md-3">
             <label class="form-label">Indicator</label>
-            <select name="indicator" class="form-select" onchange="this.form.submit()">
-                <option value="wavetrend" {% if selected_indicator == 'wavetrend' %}selected{% endif %}>WaveTrend</option>
+<select name="indicator" class="form-select">                <option value="wavetrend" {% if selected_indicator == 'wavetrend' %}selected{% endif %}>WaveTrend</option>
                 <option value="xm-indicator" {% if selected_indicator == 'xm-indicator' %}selected{% endif %}>XM Indicator</option>
                 <option value="support-and-resistance" {% if selected_indicator == 'support-and-resistance' %}selected{% endif %}>Support & Resistance</option>
             </select>
@@ -58,7 +56,7 @@
 
         <!-- Load Button -->
         <div class="col-md-3 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary w-100">
+            <button type="button" onclick="loadData()" class="btn btn-primary w-100">
                 🔄 Load Data
             </button>
         </div>
@@ -164,8 +162,10 @@ setInterval(loadData, 5000);
 document.getElementById("timezone").addEventListener("change", loadData);
 
 // 🔥 Initial load
-window.onload = loadData;
-
+window.addEventListener("load", loadData);
+document.querySelector("select[name='name']").addEventListener("change", loadData);
+document.querySelector("select[name='indicator']").addEventListener("change", loadData);
+document.querySelector("input[name='limit']").addEventListener("change", loadData);
 </script>
 
 </body>
