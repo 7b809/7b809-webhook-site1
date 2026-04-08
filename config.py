@@ -6,7 +6,8 @@ class Config:
     NAME_MAP = {
         "1": "bitcoin",
         "2": "gift-nifty",
-        "3": "nifty"
+        "3": "nifty",
+        "4":"vix"
     }
 
     INDICATOR_MAP = {
@@ -25,6 +26,8 @@ class Config:
         "7": {"name": "1", "indicator": "3"},
         "8": {"name": "3", "indicator": "1"},
         "9": {"name": "3", "indicator": "3"},
+        "10": {"name": "4", "indicator": "1"},
+
     }
     # ✅ NEW: Time-based alert control (IST)
     ALERT_TIME_CONFIG = {
