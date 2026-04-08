@@ -130,6 +130,28 @@ def should_enable_tunnel():
     logger.info("🚫 Tunnel disabled")
     return False
 
+# ============================================
+# ⏱️ Time Check Helper
+# ============================================
+def is_within_time(route_id):
+    try:
+        config = Config.ALERT_TIME_CONFIG.get(route_id)
+
+        # No config → allow
+        if not config or not config.get("enabled"):
+            return True
+
+        now = datetime.now(ist).time()
+
+        start = datetime.strptime(config["start"], "%H:%M").time()
+        end = datetime.strptime(config["end"], "%H:%M").time()
+
+        return start <= now <= end
+
+    except Exception as e:
+        logger.error(f"⏱️ Time check error: {e}")
+        return True  # fail-safe → allow
+    
 
 # ============================================
 # 🔥 WEBHOOK RECEIVER (ONLY TELEGRAM FIXED)
@@ -188,7 +210,13 @@ def webhook_handler(route_id):
 
             formatted_msg = format_telegram_message(doc_data)
 
-            send_telegram_message(formatted_msg, name=name)
+            # ✅ TIME FILTER
+            if is_within_time(route_id):
+                send_telegram_message(formatted_msg, name=name)
+            else:
+                logger.info(f"⏳ Skipped Telegram (outside time window) → route {route_id}")
+
+
 
         except Exception as tg_err:
             logger.error(f"📩 Telegram error: {tg_err}")

@@ -26,6 +26,25 @@ class Config:
         "8": {"name": "3", "indicator": "1"},
         "9": {"name": "3", "indicator": "3"},
     }
+    # ✅ NEW: Time-based alert control (IST)
+    ALERT_TIME_CONFIG = {
+        "1": {"enabled": False},
+        "2": {"enabled": False},
+        "3": {"enabled": False},
+        "4": {"enabled": False},
+        "5": {"enabled": False},
+        "6": {"enabled": False},
+        "7": {"enabled": False},
+
+        # 🔥 Example: Route 8 restricted
+        "8": {
+            "enabled": True,
+            "start": "09:15",
+            "end": "15:30"
+        },
+
+        "9": {"enabled": False},
+    }
 
     # ✅ NEW: Bot token per name
     BOT_TOKEN_MAP = {
