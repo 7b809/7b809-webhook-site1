@@ -1,5 +1,5 @@
 import requests
-import os
+import os,json
 import logging
 import re
 import time
@@ -45,6 +45,47 @@ def clean_message(text):
         logger.error(f"❌ Clean error: {e}")
         return "N/A"
 
+
+def parse_xm_indicator_message(raw):
+    try:
+        raw = raw.strip()
+
+        # # ❌ Ignore noise But keeping it for future use
+        # if raw.upper() == "NEW ALERT":
+        #     return None
+
+        # ✅ JSON signal
+        if raw.startswith("{") and raw.endswith("}"):
+            try:
+                data = json.loads(raw)
+                text = data.get("text", "")
+                return f"🔥 <b>XM Signal</b>\n\n{text}"
+            except:
+                return None
+
+        # ✅ Simple keyword mapping
+        keyword_map = {
+            "buy": "🟢 BUY Signal",
+            "strong buy": "💪 STRONG BUY",
+            "sell": "🔴 SELL Signal",
+            "stop loss": "🛑 Stop Loss Hit",
+            "target 1": "🎯 Target 1 Hit",
+            "target 2": "🎯 Target 2 Hit",
+            "target 3": "🎯 Target 3 Hit",
+        }
+
+        lower = raw.lower()
+
+        for key in keyword_map:
+            if key in lower:
+                return f"<b>{keyword_map[key]}</b>"
+
+        # fallback
+        return f"ℹ️ {raw}"
+
+    except Exception as e:
+        logger.error(f"❌ XM parse error: {e}")
+        return None
 
 # ============================================
 # 🔁 Get Bot Token
@@ -143,6 +184,22 @@ def format_telegram_message(data):
         message = clean_message(data.get("content"))
         time_val = clean_message(data.get("time"))
 
+        # ✅ NEW: XM Indicator handling
+        if indicator == "xm-indicator":
+            parsed_msg = parse_xm_indicator_message(message)
+
+            # ❌ skip noise
+            if not parsed_msg:
+                return None
+
+            return (
+                f"<b>📊 XM Indicator Alert</b>\n"
+                f"<b>Symbol:</b> {name}\n\n"
+                f"{parsed_msg}\n\n"
+                f"<b>Time:</b> {time_val}"
+            )
+
+        # ✅ Existing logic (UNCHANGED)
         return (
             f"<b>📊 Trading Alert</b>\n"
             f"<b>Symbol:</b> {name}\n"

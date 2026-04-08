@@ -274,6 +274,11 @@ def webhook_handler(route_id):
 
             formatted_msg = format_telegram_message(doc_data)
 
+            # ❌ Skip sending if None (like NEW ALERT)
+            if not formatted_msg:
+                return jsonify({"status": "skipped"}), 200
+
+
             # 🆕 PnL logic
             if indicator == "wavetrend":
                 parsed = parse_wavetrend_message(raw_data)
