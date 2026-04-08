@@ -131,7 +131,7 @@ def should_enable_tunnel():
     return False
 
 # ============================================
-# ⏱️ Time Check Helper
+# ⏱️ Time Check Helper (IST SAFE)
 # ============================================
 def is_within_time(route_id):
     try:
@@ -141,16 +141,31 @@ def is_within_time(route_id):
         if not config or not config.get("enabled"):
             return True
 
-        now = datetime.now(ist).time()
+        # ✅ Current IST datetime
+        now_ist = datetime.now(ist)
 
-        start = datetime.strptime(config["start"], "%H:%M").time()
-        end = datetime.strptime(config["end"], "%H:%M").time()
+        # ✅ Parse start/end in IST (same date)
+        start_dt = ist.localize(
+            datetime.strptime(config["start"], "%H:%M").replace(
+                year=now_ist.year,
+                month=now_ist.month,
+                day=now_ist.day
+            )
+        )
 
-        return start <= now <= end
+        end_dt = ist.localize(
+            datetime.strptime(config["end"], "%H:%M").replace(
+                year=now_ist.year,
+                month=now_ist.month,
+                day=now_ist.day
+            )
+        )
+
+        return start_dt <= now_ist <= end_dt
 
     except Exception as e:
         logger.error(f"⏱️ Time check error: {e}")
-        return True  # fail-safe → allow
+        return True  # fail-safe
     
 
 # ============================================
