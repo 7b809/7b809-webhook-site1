@@ -3,10 +3,8 @@ from db import collection
 import os
 from dotenv import load_dotenv
 import logging
-# ✅ UPDATED IMPORT
 from telegram_msg import send_telegram_message, format_telegram_message
 
-# 🔽 NEW IMPORTS (for tunnel)
 import subprocess
 import shutil
 import re, uuid
@@ -14,19 +12,15 @@ from threading import Thread
 from datetime import datetime
 import pytz
 
-# 🌏 IST timezone
 ist = pytz.timezone("Asia/Kolkata")
 
-# ✅ NEW IMPORT
 from config import Config
 
 load_dotenv()
 
-# 🔧 Config
 TEST_LOG = os.getenv("TEST_LOG", "false").lower() == "true"
 ENABLE_TUNNEL = os.getenv("ENABLE_TUNNEL", "false").lower() == "true"
 
-# 🪵 Logger setup
 logger = logging.getLogger("webhook_app")
 logger.setLevel(logging.DEBUG if TEST_LOG else logging.ERROR)
 
@@ -71,7 +65,6 @@ def calculate_pnl(name, parsed_data):
         if name in last_trade:
             entry_price = last_trade[name]["price"]
 
-            # ✅ CE / PE logic
             if parsed_data["old_type"] == "pe":
                 pnl = entry_price - price
             else:
@@ -94,7 +87,26 @@ def calculate_pnl(name, parsed_data):
         return None
 
 # ============================================
-# 🌐 Cloudflare Tunnel Helpers (UNCHANGED)
+# 🆕 WEEKEND CHECK HELPER (ADDED)
+# ============================================
+def is_weekend_allowed():
+    try:
+        TEST_DAYS = os.getenv("TEST_DAYS", "false").lower() == "true"
+
+        now_ist = datetime.now(ist)
+        weekday = now_ist.weekday()  # Monday=0, Sunday=6
+
+        if weekday in [5, 6]:
+            return TEST_DAYS
+
+        return True
+
+    except Exception as e:
+        logger.error(f"📅 Weekend check error: {e}")
+        return True
+
+# ============================================
+# 🌐 Cloudflare Tunnel Helpers
 # ============================================
 def install_cloudflared():
     if shutil.which("cloudflared"):
@@ -169,22 +181,18 @@ def should_enable_tunnel():
     env = get_environment()
 
     if env == "windows":
-        logger.info("🪟 Windows → Tunnel OFF")
         return False
 
     if env == "colab":
-        logger.info("📓 Colab → Tunnel ON (forced)")
         return True
 
     if ENABLE_TUNNEL:
-        logger.info("🌐 Tunnel enabled via ENV")
         return True
 
-    logger.info("🚫 Tunnel disabled")
     return False
 
 # ============================================
-# ⏱️ Time Check Helper (IST SAFE)
+# ⏱️ Time Check Helper
 # ============================================
 def is_within_time(route_id):
     try:
@@ -263,7 +271,6 @@ def webhook_handler(route_id):
             logger.error(f"❌ DB Insert Error: {db_err}")
             return jsonify({"error": "DB error"}), 500
 
-        # ✅ TELEGRAM + PnL (ADDED ONLY)
         try:
             doc_data = {
                 "name": name,
@@ -274,12 +281,9 @@ def webhook_handler(route_id):
 
             formatted_msg = format_telegram_message(doc_data)
 
-            # ❌ Skip sending if None (like NEW ALERT)
             if not formatted_msg:
                 return jsonify({"status": "skipped"}), 200
 
-
-            # 🆕 PnL logic
             if indicator == "wavetrend":
                 parsed = parse_wavetrend_message(raw_data)
 
@@ -293,6 +297,11 @@ def webhook_handler(route_id):
                             f"Exit: {pnl_data['exit']}\n"
                             f"P&L: {pnl_data['pnl']}"
                         )
+
+            # 🆕 WEEKEND CHECK
+            if not is_weekend_allowed():
+                logger.info("📅 Skipped (Weekend Blocked)")
+                return jsonify({"status": "skipped_weekend"}), 200
 
             # ✅ TIME FILTER
             if is_within_time(route_id):
